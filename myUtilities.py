@@ -24,38 +24,19 @@ gift_latlong = _data_df_[['Latitude', 'Longitude']].to_dict(orient='index')
 # Add the depot lat/long to the dictionary
 gift_latlong[0] = {'Latitude': 90, 'Longitude': 0}
 
+total_gifts = len(_data_df_)
 base_weight = 10
 weight_limit = 100
 
 ######################################################################################################################
 # Public Functions
 ######################################################################################################################
-# This function returns ...
-def haversine_distance(origin, destination):
-
-    lat1, lon1 = origin['Latitude'], origin['Longitude']
-    lat2, lon2 = destination['Latitude'], destination['Longitude']
-    radius = 6371  # km
-
-    dlat = math.radians(lat2-lat1)
-    dlon = math.radians(lon2-lon1)
-    a = math.sin(dlat/2) * math.sin(dlat/2) + math.cos(math.radians(lat1)) \
-        * math.cos(math.radians(lat2)) * math.sin(dlon/2) * math.sin(dlon/2)
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    d = radius * c
-
-    return d
-
-
-######################################################################################################################
-# Private Functions
-######################################################################################################################
-
 # This function creates an individual for the population.
-def create_indiv(gifts):
+def create_indiv(icls, gifts):
 
     # Create an individual in the population.
-    undelivered_gifts = gifts
+    undelivered_gifts = gifts.copy()
+    # so that the original list is not changed; need it for each following call to create the population
     indiv = []
     while len(undelivered_gifts) > 0:
 
@@ -71,11 +52,28 @@ def create_indiv(gifts):
                 break
 
         # Add the trip to the individual
+        ##### for testing
+        # if not trip:
+        #     print('empty trip')
         indiv.append(trip)
 
-    return indiv
+    return icls(indiv)
 
 
+# This function creates an individual for the population using multiprocessing.
+def mp_create_indiv(icls, gifts, for_pop, n=1):
+    for_pop.append(create_indiv(icls, gifts))
+    return None
+
+
+# This function is a crossover function.
+def mate(indiv1, indiv2):
+    return (get_child(indiv1, indiv2), get_child(indiv1, indiv2))
+
+
+######################################################################################################################
+# Private Functions
+######################################################################################################################
 # undelivered_gifts is a list
 def insert_best_gift_into_trip(trip, undelivered_gifts):
 
@@ -152,6 +150,66 @@ def insert_best_gift_into_trip(trip, undelivered_gifts):
     return inserted, new_trip, remaining_gifts
 
 
+# This function returns a child which is a combination of randomly selected trips from 2 individuals and other trips to complete it.
+def get_child(indiv1, indiv2):
+
+    child = []
+
+    insert = True
+    while insert:
+
+        # Randomly copy a trip from indiv1 to child1
+        all_gifts_child = set([a_gift for a_trip in child for a_gift in a_trip])
+        selectable_trips_indiv1 = [a_trip for a_trip in indiv1 if not set(a_trip).intersection(all_gifts_child)]
+        if selectable_trips_indiv1:  # not empty list
+            ##### for testing
+            # x = random.sample(selectable_trips_indiv1, 1)[0]
+            # if not x:
+            #     print('empty')
+            # child.append(x)
+            child.append(random.sample(selectable_trips_indiv1, 1)[0])
+        else:
+            insert = False
+
+        # Randomly copy a trip from indiv2 to child1
+        all_gifts_child = set([a_gift for a_trip in child for a_gift in a_trip])
+        selectable_trips_indiv2 = [a_trip for a_trip in indiv2 if not set(a_trip).intersection(all_gifts_child)]
+        if selectable_trips_indiv2:  # not empty list
+            ##### for testing
+            # x = random.sample(selectable_trips_indiv2, 1)[0]
+            # if not x:
+            #     print('empty')
+            # child.append(x)
+            child.append(random.sample(selectable_trips_indiv2, 1)[0])
+        else:
+            insert = False
+
+    # Insert remaining gifts into the child.
+    #undelivered_gifts = [a_gift for a_gift in range(1, total_gifts + 1) if a_gift not in all_gifts_child]
+    all_gifts = [a_gift for a_trip in indiv1 for a_gift in a_trip]
+    undelivered_gifts = [a_gift for a_gift in all_gifts if a_gift not in all_gifts_child]
+    while len(undelivered_gifts) > 0:
+
+        # Create a new trip
+        seed_gift = random.sample(undelivered_gifts, 1)
+        undelivered_gifts.remove(seed_gift[0])
+        trip = seed_gift
+
+        # Add gifts to the trip.
+        while len(undelivered_gifts) > 0:
+            inserted, trip, undelivered_gifts = insert_best_gift_into_trip(trip, undelivered_gifts)
+            if not inserted:
+                break
+
+        # Add the trip to the individual
+        ##### for testing
+        # if not trip:
+        #     print('empty')
+        child.append(trip)
+
+    return (type(indiv1))(child)
+
+
 # This function returns the weighted reindeer weariness for a complete solution.
 def weighted_reindeer_weariness(indiv):
 
@@ -176,4 +234,20 @@ def reindeer_weariness_trip(trip):
 
     return trip_weariness
 
+
+# This function returns ...
+def haversine_distance(origin, destination):
+
+    lat1, lon1 = origin['Latitude'], origin['Longitude']
+    lat2, lon2 = destination['Latitude'], destination['Longitude']
+    radius = 6371  # km
+
+    dlat = math.radians(lat2-lat1)
+    dlon = math.radians(lon2-lon1)
+    a = math.sin(dlat/2) * math.sin(dlat/2) + math.cos(math.radians(lat1)) \
+        * math.cos(math.radians(lat2)) * math.sin(dlon/2) * math.sin(dlon/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    d = radius * c
+
+    return d
 
